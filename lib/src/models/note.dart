@@ -1,26 +1,130 @@
-// class Note {
-//   String title;
-//   String body;
-
-//   Note(this.title, this.body);
-// }
-
-// List<Note> notes = [
-//   Note('Biology Lecture',
-//       'In today\'s biology lecture, we delved into the fascinating world of genetics. We learned about DNA structure, genes, and genetic inheritance patterns. The professor explained the concepts of dominant and recessive traits and discussed how variations occur through mutations and genetic recombination. We also explored the applications of genetics in fields like medicine and agriculture. The lecture was thought-provoking and provided a solid foundation for further study in this captivating field.'),
-//   Note('Book Review - "The Great Gatsby"',
-//       'F. Scott Fitzgerald\'s \'The Great Gatsby\' is a literary masterpiece that explores themes of wealth, love, and the elusive American Dream. Set in the roaring 1920s, the novel follows the enigmatic Jay Gatsby and his pursuit of the unattainable Daisy Buchanan. The exquisite prose vividly captures the decadence and excesses of the era while delving into the darker undercurrents of society. With complex characters and a mesmerizing narrative, \'The Great Gatsby\' remains a timeless classic that resonates with readers of all generations.'),
-//   Note('Cardio Workout',
-//       'Today\'s cardio workout was intense and invigorating. We started with a five-minute warm-up, followed by a 30-minute jog on the treadmill. The increased heart rate and sweating signaled an effective calorie burn. Next, we incorporated high-intensity interval training (HIIT) exercises, alternating between bursts of intense effort and short recovery periods. This combination of cardio and HIIT provided a full-body workout, boosting endurance and strengthening muscles. We finished with a cooldown session and some stretching to prevent muscle soreness.'),
-//   Note('Recipe - Homemade Pizza',
-//       'Making homemade pizza was a delightful culinary adventure. We prepared the pizza dough from scratch, allowing it to rise and develop a perfect texture. For the sauce, we blended fresh tomatoes, garlic, and aromatic herbs, simmering it to enhance the flavors. Toppings included a medley of colorful vegetables, gooey mozzarella cheese, and a sprinkle of fragrant basil leaves. The pizza baked to perfection, with a crispy crust and melty cheese. Each bite was a taste of satisfaction, making us appreciate the joy of homemade goodness.'),
-//   Note('Paris Trip',
-//       'Our trip to Paris was an incredible experience. We explored iconic landmarks like the Eiffel Tower, Louvre Museum, and Notre-Dame Cathedral. The charming streets of Montmartre and the vibrant atmosphere of the Latin Quarter left lasting impressions. We indulged in delicious French cuisine, savoring croissants, escargots, and crepes. The city\'s rich history and cultural heritage were evident at every turn. From strolling along the Seine River to admiring the stunning art collections, our Paris adventure was nothing short of magical'),
-// ];
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
 class Note {
+  final String id;
   final String title;
-  final String body;
+  final String content;
+  final String timestamp;
 
-  Note({required this.title, required this.body});
+  Note({
+    required this.id,
+    required this.title,
+    required this.content,
+    required this.timestamp,
+  });
+
+  // Factory method to create a Note object from JSON
+  factory Note.fromJson(Map<String, dynamic> json) {
+    return Note(
+      id: json['id'] ?? '', // Default to an empty string if 'id' is null
+      title: json['title'] ?? '',
+      content: json['content'] ?? '',
+      timestamp: json['timestamp'] ??
+          '', // Default to an empty string if 'timestamp' is null
+    );
+  }
+
+  // Convert Note object to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'content': content,
+      'timestamp': timestamp,
+    };
+  }
+}
+
+class NoteService {
+  final String baseUrl = 'http://localhost/noteapp';
+
+  // Fetch all notes
+  Future<List<Note>> getNotes() async {
+    var url = Uri.parse('$baseUrl/read.php');
+    var response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      List<dynamic> data = json.decode(response.body);
+      data.map((note) => {print(Note.fromJson(note))});
+      return data.map((note) => Note.fromJson(note)).toList();
+    } else {
+      throw Exception('Failed to load notes');
+    }
+  }
+
+  Future<Note> getNotesByID(String id) async {
+    var url = Uri.parse('$baseUrl/getByID.php');
+    var response = await http.post(
+      url,
+      body: {
+        'id': id,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      var jsonData = json.decode(response.body); // Parse JSON
+      Note data = Note.fromJson(jsonData); // Convert to Note object
+      return data;
+    } else {
+      throw Exception('Failed to load note');
+    }
+  }
+
+  // Create a new note
+  Future<bool> createNote(String title, String content) async {
+    var url = Uri.parse('$baseUrl/create.php');
+    var response = await http.post(
+      url,
+      body: {
+        'title': title,
+        'content': content,
+        "timestamp": DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now())
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body)['success'];
+    } else {
+      print("Failed to create note");
+      return false; // Return false in case of failure
+    }
+  }
+
+  // Update an existing note
+  Future<bool> updateNote(Note note) async {
+    var url = Uri.parse('$baseUrl/update.php');
+    var response = await http.post(
+      url,
+      body: {
+        'id': note.id,
+        'title': note.title,
+        'content': note.content,
+        "timestamp": DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now())
+      },
+    );
+    if (response.statusCode == 200) {
+      return json.decode(response.body)['success'];
+    } else {
+      throw Exception('Failed to update note');
+    }
+  }
+
+  // Delete a note
+  Future<bool> deleteNote(String id) async {
+    var url = Uri.parse('$baseUrl/delete.php');
+    var response = await http.post(
+      url,
+      body: {
+        'id': id,
+      },
+    );
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      print("Failed to delete note");
+      return false;
+    }
+  }
 }

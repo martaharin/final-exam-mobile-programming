@@ -5,21 +5,21 @@ import 'package:fleather/fleather.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:notes_app_flutter/src/models/note.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:intl/intl.dart';
 
-class CreateNote extends StatefulWidget {
-  const CreateNote({super.key, required this.onNewNoteCreated});
+class ViewNote extends StatefulWidget {
+  const ViewNote({super.key, required this.onNoteUpdated, required this.note});
 
-  final Function(Note) onNewNoteCreated;
+  final Function(Note) onNoteUpdated;
+  final Note note;
+
   @override
-  State<CreateNote> createState() => _CreateNoteState();
+  State<ViewNote> createState() => _ViewNoteState();
 }
 
-class _CreateNoteState extends State<CreateNote> {
+class _ViewNoteState extends State<ViewNote> {
   final titleController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final GlobalKey<EditorState> _editorKey = GlobalKey();
@@ -30,11 +30,13 @@ class _CreateNoteState extends State<CreateNote> {
     super.initState();
     if (kIsWeb) BrowserContextMenu.disableContextMenu();
     _initController();
+    titleController.text = widget.note.title;
   }
 
   @override
   void dispose() {
     super.dispose();
+    titleController.dispose();
     if (kIsWeb) BrowserContextMenu.enableContextMenu();
   }
 
@@ -60,9 +62,47 @@ class _CreateNoteState extends State<CreateNote> {
   //   }
   // }
 
+  // Future<void> _pickImage() async {
+  //   final picker = ImagePicker();
+  //   final image = await picker.pickImage(source: ImageSource.gallery);
+  //   if (image != null && _controller != null) {
+  //     final selection = _controller!.selection;
+  //     final imageBytes = await File(image.path).readAsBytes();
+  //     final base64Image = base64Encode(imageBytes); // Convert image to base64
+
+  //     _controller!.replaceText(
+  //       selection.baseOffset,
+  //       selection.extentOffset - selection.baseOffset,
+  //       EmbeddableObject('image', inline: false, data: {
+  //         'source_type': 'base64',
+  //         'source': base64Image, // Store the base64 string
+  //       }),
+  //     );
+  //     _controller!.replaceText(
+  //       selection.baseOffset + 1,
+  //       0,
+  //       '\n',
+  //       selection: TextSelection.collapsed(offset: selection.baseOffset + 2),
+  //     );
+  //   }
+  // }
+
   Future<void> _initController() async {
     try {
-      final doc = ParchmentDocument();
+      String sanitizedContent =
+          widget.note.content.replaceAll(RegExp(r'\\[bfnrt/"]'), '');
+      final List<dynamic> deltaList = jsonDecode(sanitizedContent);
+
+      final delta = Delta.fromJson(deltaList);
+
+      if (delta.isNotEmpty && !delta.last.data.toString().endsWith('\n')) {
+        deltaList.add({"insert": "\n"});
+      }
+
+      final updatedDelta = Delta.fromJson(deltaList);
+
+      final doc = ParchmentDocument.fromDelta(updatedDelta);
+
       _controller = FleatherController(document: doc);
     } catch (err, st) {
       print('Error initializing the controller: $err\n$st');
@@ -77,20 +117,17 @@ class _CreateNoteState extends State<CreateNote> {
       appBar: AppBar(elevation: 0, title: const Text('Create Note')),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          String jsonData =
-              jsonEncode(_controller?.document.toDelta().toJson());
+          String jsonData = jsonEncode(
+              _controller?.document.toDelta().toJson()); // Save as JSON
 
           final note = Note(
-            id: "",
-            title: titleController.text.isNotEmpty
-                ? titleController.text
-                : "Untitled",
-
+            id: widget.note.id,
+            title: titleController.text,
             content: jsonData, // Use the JSON-encoded content
             timestamp: "", // Use the formatted date and time
           );
-          widget.onNewNoteCreated(note);
-          Navigator.of(context).pop();
+          widget.onNoteUpdated(note); // Pass back the new note
+          Navigator.of(context).pop(); // Close the screen
         },
         child: const Icon(Icons.save),
       ),
@@ -148,11 +185,6 @@ class _CreateNoteState extends State<CreateNote> {
                     onLaunchUrl: _launchUrl,
                     maxContentWidth: 800,
                     embedBuilder: _embedBuilder,
-                    spellCheckConfiguration: SpellCheckConfiguration(
-                        spellCheckService: DefaultSpellCheckService(),
-                        misspelledSelectionColor: Colors.red,
-                        misspelledTextStyle:
-                            DefaultTextStyle.of(context).style),
                   ),
                 ),
               ],
@@ -161,15 +193,6 @@ class _CreateNoteState extends State<CreateNote> {
   }
 
   // Widget _embedBuilder(BuildContext context, EmbedNode node) {
-  //   if (node.value.type == 'icon') {
-  //     final data = node.value.data;
-  //     return Icon(
-  //       IconData(int.parse(data['codePoint']), fontFamily: data['fontFamily']),
-  //       color: Color(int.parse(data['color'])),
-  //       size: 18,
-  //     );
-  //   }
-
   //   if (node.value.type == 'image') {
   //     final sourceType = node.value.data['source_type'];
   //     ImageProvider? image;
@@ -194,7 +217,6 @@ class _CreateNoteState extends State<CreateNote> {
   //       );
   //     }
   //   }
-
   //   return defaultFleatherEmbedBuilder(context, node);
   // }
 
@@ -205,15 +227,9 @@ class _CreateNoteState extends State<CreateNote> {
 
       if (sourceType == 'base64') {
         final base64String = node.value.data['source'];
-        try {
-          // Ensure valid base64 string is decoded
-          final imageBytes = base64Decode(base64String);
-          image = MemoryImage(
-              imageBytes); // Decode and load image using MemoryImage
-        } catch (e) {
-          print('Error decoding base64 image: $e');
-          return SizedBox.shrink(); // Return empty widget if decoding fails
-        }
+        final imageBytes =
+            base64Decode(base64String); // Decode the base64 string
+        image = MemoryImage(imageBytes); // Use MemoryImage to display the image
       } else if (sourceType == 'assets') {
         image = AssetImage(node.value.data['source']);
       } else if (sourceType == 'file') {
@@ -222,11 +238,15 @@ class _CreateNoteState extends State<CreateNote> {
         image = NetworkImage(node.value.data['source']);
       }
 
-      // If image is not null, display the image
       if (image != null) {
         return Padding(
           padding: const EdgeInsets.only(left: 4, right: 2, top: 2, bottom: 2),
-          child: Image(image: image, fit: BoxFit.contain),
+          child: Expanded(
+            child: Image(
+              image: image,
+              fit: BoxFit.contain,
+            ),
+          ),
         );
       }
     }
@@ -240,43 +260,5 @@ class _CreateNoteState extends State<CreateNote> {
     if (canLaunch) {
       await launchUrl(uri);
     }
-  }
-}
-
-class ForceNewlineForInsertsAroundInlineImageRule extends InsertRule {
-  @override
-  Delta? apply(Delta document, int index, Object data) {
-    if (data is! String) return null;
-
-    final iter = DeltaIterator(document);
-    final previous = iter.skip(index);
-    final target = iter.next();
-    final cursorBeforeInlineEmbed = _isInlineImage(target.data);
-    final cursorAfterInlineEmbed =
-        previous != null && _isInlineImage(previous.data);
-
-    if (cursorBeforeInlineEmbed || cursorAfterInlineEmbed) {
-      final delta = Delta()..retain(index);
-      if (cursorAfterInlineEmbed && !data.startsWith('\n')) {
-        delta.insert('\n');
-      }
-      delta.insert(data);
-      if (cursorBeforeInlineEmbed && !data.endsWith('\n')) {
-        delta.insert('\n');
-      }
-      return delta;
-    }
-    return null;
-  }
-
-  bool _isInlineImage(Object data) {
-    if (data is EmbeddableObject) {
-      return data.type == 'image' && data.inline;
-    }
-    if (data is Map) {
-      return data[EmbeddableObject.kTypeKey] == 'image' &&
-          data[EmbeddableObject.kInlineKey];
-    }
-    return false;
   }
 }
