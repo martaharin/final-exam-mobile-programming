@@ -1,6 +1,6 @@
 {
-    "name": "notes_app_flutter",
-    "short_name": "notes_app_flutter",
+    "name": "customer_app",
+    "short_name": "customer_app",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

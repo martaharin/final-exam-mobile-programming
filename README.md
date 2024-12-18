@@ -1,4 +1,4 @@
-# notes_app_flutter
+# customer_app
 
 A new Flutter project.
 

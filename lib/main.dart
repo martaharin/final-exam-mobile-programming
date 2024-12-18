@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:notes_app_flutter/src/screens/home.dart';
+import 'package:customer_app/src/screens/register.dart';
 
 void main() {
   runApp(const MyApp());
@@ -14,6 +14,6 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
         title: 'Flutter Demo',
         theme: ThemeData(useMaterial3: true, brightness: Brightness.dark),
-        home: const Home());
+        home: Register());
   }
 }
